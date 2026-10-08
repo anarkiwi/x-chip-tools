@@ -4,10 +4,10 @@
 #   ./update.sh <headless|gui|pocketchip>
 #
 # Three per-repo releases feed a flash (see memory: flash-release-topology):
-#   - rootfs   <- nextthingco/x-chip-os     asset <flavor>-rootfs.tar.gz   (PROMPTED)
-#   - initrd   <- nextthingco/x-chip-tools  asset initrd.uimage            (auto)
-#   - u-boot   <- nextthingco/x-chip-uboot  sunxi-spl.bin/u-boot-dtb.bin/  (auto)
-#                                           u-boot-sunxi-with-spl.bin
+#   - rootfs   <- anarkiwi/x-chip-os     asset <flavor>-rootfs.tar.gz   (PROMPTED)
+#   - initrd   <- anarkiwi/x-chip-tools  asset initrd.uimage            (auto)
+#   - u-boot   <- anarkiwi/x-chip-uboot  sunxi-spl.bin/u-boot-dtb.bin/  (auto)
+#                                        u-boot-sunxi-with-spl.bin
 #
 # The rootfs is versioned and the user is PROMPTED before downloading a newer
 # build; declining reuses the newest local image, and if there is none we exit.
@@ -41,9 +41,9 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$FLAVOR" ] || usage
 
-OS_REPO=${OS_REPO:-nextthingco/x-chip-os}
-TOOLS_REPO=${TOOLS_REPO:-nextthingco/x-chip-tools}
-UBOOT_REPO=${UBOOT_REPO:-nextthingco/x-chip-uboot}
+OS_REPO=${OS_REPO:-anarkiwi/x-chip-os}
+TOOLS_REPO=${TOOLS_REPO:-anarkiwi/x-chip-tools}
+UBOOT_REPO=${UBOOT_REPO:-anarkiwi/x-chip-uboot}
 
 CACHE="$HERE/.images"
 mkdir -p "$CACHE"
@@ -54,19 +54,13 @@ mkdir -p "$CACHE"
 
 have_gh() { command -v gh >/dev/null 2>&1; }
 
-_curl_auth() {
-  local tok="${GITHUB_TOKEN:-}"
-  [ -z "$tok" ] && have_gh && tok=$(gh auth token 2>/dev/null || true)
-  [ -n "$tok" ] && printf '%s' "-H Authorization: Bearer $tok"
-}
-
 # latest_tag REPO  ->  prints the tag of the "latest" release ("" on failure)
 latest_tag() {
   local repo=$1
   if have_gh; then
     gh release view --repo "$repo" --json tagName -q .tagName 2>/dev/null || true
   else
-    curl -fsSL $(_curl_auth) "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null \
+    curl -fsSL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null \
       | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1
   fi
 }
@@ -82,13 +76,13 @@ download_asset() {
     # browser_download_url works anonymously for public releases; a token (if
     # set) still authorizes it for private repos.
     local url name
-    curl -fsSL $(_curl_auth) "https://api.github.com/repos/$repo/releases/tags/$tag" \
+    curl -fsSL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} "https://api.github.com/repos/$repo/releases/tags/$tag" \
       | sed -n 's/.*"browser_download_url": *"\([^"]*\)".*/\1/p' \
       | while read -r url; do
           name=${url##*/}
-          case "$name" in $pat) ;; *) continue ;; esac
+          case "$name" in "$pat") ;; *) continue ;; esac
           echo ">> downloading $name ($repo $tag)"
-          curl -fSL $(_curl_auth) "$url" -o "$dir/$name"
+          curl -fSL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} "$url" -o "$dir/$name"
         done
   fi
 }
